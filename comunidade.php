@@ -1,3 +1,9 @@
+<?php
+    include('protect.php');
+
+?>
+
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -8,6 +14,9 @@
     <link rel="stylesheet" href="Css/comunidade.css">
 </head>
 <body>
+    <p>
+        <a href="logout"> Sair </a>
+    </p>
     
 </body>
 </html>
