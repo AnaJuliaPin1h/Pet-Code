@@ -1,54 +1,156 @@
-
-<!DOCTYPE html>
-
 <?php
-    include('conexao.php');
+// Inclui as variáveis de configuração e a função conectar_banco()
+require_once('conexao.php');
 
-    if (isset($_POST['email']) || isset($_POST['senha'])) {
-        //strlen é a quantia de caracteres
-        if (strlen($_POST['email']) == 0) {
-            echo "preenncha seu email";
-        } else if (strlen($_POST['senha']) ==0) {
-            echo "digite uma senha";
+// Inicia a sessão para armazenar mensagens de feedback
+session_start();
+
+// Define a conexão para o escopo global do script
+global $table_name;
+$conn = conectar_banco(); // Conecta ao DB no início
+
+$message = $_SESSION['message'] ?? '';
+$message_type = $_SESSION['message_type'] ?? '';
+
+// Limpa as mensagens da sessão após exibir
+unset($_SESSION['message']);
+unset($_SESSION['message_type']);
+
+// --- LÓGICA DE PROCESSAMENTO ---
+
+// Processamento do Formulário de Registro
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register'])) {
+    
+    // 1. Obtém e sanitiza os dados (sem real_escape_string, pois estamos usando prepared statements)
+    $nome = $_POST['nome'] ?? '';
+    $email = $_POST['email'] ?? '';
+    $senha = $_POST['senha'] ?? '';
+    $confirmar_senha = $_POST['confirmar_senha'] ?? '';
+    $pergunta = $_POST['pergunta'] ?? '';
+    $resposta = $_POST['resposta'] ?? '';
+    
+    // Dados Opcionais
+    $nome_pet = $_POST['nome_pet'] ?? '';
+    $especie = $_POST['especie'] ?? '';
+    $idade = (int)($_POST['idade'] ?? 0);
+
+    // 2. Validação
+    if ($senha !== $confirmar_senha) {
+        $message = "Erro: As senhas não coincidem.";
+        $message_type = "error";
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $message = "Erro: Formato de e-mail inválido.";
+        $message_type = "error";
+    } elseif (empty($nome) || empty($email) || empty($senha)) {
+        $message = "Erro: Por favor, preencha todos os campos obrigatórios (Nome, E-mail, Senha).";
+        $message_type = "error";
+    } else {
+        // 3. Hashing da senha
+        $senha_hash = password_hash($senha, PASSWORD_DEFAULT);
+
+        // 4. Verifica se o e-mail já existe
+        $check_sql = "SELECT id FROM $table_name WHERE email = ?";
+        $stmt_check = $conn->prepare($check_sql);
+        
+        if ($stmt_check === false) {
+             $message = "Erro na preparação da consulta de verificação: " . $conn->error;
+             $message_type = "error";
         } else {
-            //funçao realscape tring, ela limpa a string que ta dentro do email (mais pro caso de proteçao ao banco de daods, evita o sql injection)
-            $email = $mysqli->real_scape_string($_POST['email']);
-            $senha = $mysqli->real_scape_string($_POST['email']);
-
-
-            //consulta ao sql
-            $sql_code = "SELECT * FROM usuarios WHERE  'email'='$email' AND 'senha' = '$senha' ";
-            $dql_query = $mysqli->query($sql_code) or die("falha na execuçao do codigo sql".$mysqli->error);
-
-            $quantidade = $sql_query->num_rows;
-
-            if ($quantidade == 1) {
-
-                $usuario = $sql_query -> fetch_assoc();
-                if (!isset($_SESSION)) {
-                    session_start();
-                }
-
-                $_SESSION['id'] = $usuario['id'];
-                $_SESSION['nome'] = $usuario['nome'];
-                //session é uma variavel que continua valida mesmo quando a pessoa troca de pagina, get so continua valida na url, post continua valida quando é enviada por um formulario, eessa fica armazenada por uma quantia de tempo
-                header("Location: comunidade.php");
-                }
+            $stmt_check->bind_param("s", $email);
+            $stmt_check->execute();
+            $stmt_check->store_result();
             
-            else 
-                echo "falha ao logar"; 
+            if ($stmt_check->num_rows > 0) {
+                $message = "Erro: Este e-mail já está cadastrado.";
+                $message_type = "error";
+            } else {
+                // 5. Insere novo usuário
+                $sql = "INSERT INTO $table_name (nome, email, senha_hash, pergunta_seguranca, resposta_seguranca, nome_pet, especie, idade_pet) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+                
+                $stmt = $conn->prepare($sql);
+
+                if ($stmt === false) {
+                    $message = "Erro na preparação da consulta de inserção: " . $conn->error;
+                    $message_type = "error";
+                } else {
+                    $stmt->bind_param("sssssssi", $nome, $email, $senha_hash, $pergunta, $resposta, $nome_pet, $especie, $idade);
+
+                    if ($stmt->execute()) {
+                        $message = "Cadastro realizado com sucesso! Bem-vindo(a) à Pet-code.";
+                        $message_type = "success";
+                    } else {
+                        $message = "Erro ao cadastrar: " . $stmt->error;
+                        $message_type = "error";
+                    }
+                    $stmt->close();
+                }
+            }
+            $stmt_check->close();
         }
     }
-?>
+} 
 
+// Processamento do Formulário de Login
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['login'])) {
+
+    $email_login = $_POST['email_login'] ?? '';
+    $senha_login = $_POST['senha_login'] ?? '';
+
+    $sql = "SELECT id, nome, senha_hash FROM $table_name WHERE email = ?";
+    $stmt = $conn->prepare($sql);
+    
+    if ($stmt === false) {
+        $message = "Erro na preparação da consulta de login: " . $conn->error;
+        $message_type = "error";
+    } else {
+        $stmt->bind_param("s", $email_login);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($result->num_rows === 1) {
+            $user = $result->fetch_assoc();
+            
+            // Verifica a senha
+            if (password_verify($senha_login, $user['senha_hash'])) {
+                $message = "Login realizado com sucesso! Olá, " . htmlspecialchars($user['nome']) . ".";
+                $message_type = "success";
+                // --- AQUI VOCÊ DEVE INICIAR A SESSÃO DE LOGIN ---
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['user_nome'] = $user['nome'];
+                // Redirecionar para a página principal após o login é uma boa prática:
+                // header("Location: index.php"); 
+                // exit();
+                // ----------------------------------------------------
+
+            } else {
+                $message = "Erro de Login: Senha incorreta.";
+                $message_type = "error";
+            }
+        } else {
+            $message = "Erro de Login: E-mail não encontrado.";
+            $message_type = "error";
+        }
+        $stmt->close();
+    }
+}
+
+// Fecha a conexão com o banco de dados no final do script.
+$conn->close();
+
+?>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login | Pet-code</title>
+    <style>
+        .message-success { color: green; border: 1px solid green; padding: 10px; margin-bottom: 20px; }
+        .message-error { color: red; border: 1px solid red; padding: 10px; margin-bottom: 20px; }
+    </style>
 </head>
 <body>
-  <!-- Cabeçalho -->
+    
     <header class="header">
         <div class="container">
             <a href="index.html" class="navbar-brand">
@@ -59,7 +161,7 @@
                 <ul>
                     <li><a href="index.html">Início</a></li>
                     <li><a href="servicos.html">Serviços</a></li>
-                    <li><a href="cadastro.html">Cadastrar</a></li>
+                    <li><a href="cadastro.php">Cadastrar</a></li>
                     <li><a href="comunidade.html">Comunidade</a></li>
                     <li><a href="contato.html">Contato</a></li>
                 </ul>
@@ -67,17 +169,22 @@
         </div>
     </header>
 
-    <!-- Conteúdo Principal -->
     <main class="container">
 
-        <!-- Seção Cadastro -->
+        <?php if (!empty($message)): ?>
+            <div class="message-<?php echo $message_type; ?>">
+                <?php echo $message; ?>
+            </div>
+        <?php endif; ?>
+
         <section class="secao-cadastro">
             <h2>Crie sua conta na Pet-code 
                 <img src="Imagens/icons8-cachorro-novo-cadastro.png" alt="Ícone dog cadastro">
             </h2>
             <p>Cadastre-se para acessar todos os recursos da plataforma e interagir com outros tutores!</p>
 
-            <form class="form-cadastro" action="#" method="POST">
+            <form class="form-cadastro" action="" method="POST">
+                <input type="hidden" name="register" value="1"> 
 
                 <h3>
                     <img src="Imagens/icons8-pessoa-do-sexo-masculino-64-cadastro.png" alt="Ícone person cadastro">
@@ -102,9 +209,9 @@
                 <label for="pergunta">Escolha uma pergunta:</label>
                 <select id="pergunta" name="pergunta" required>
                     <option value="">Selecione...</option>
-                    <option value="animal">Qual foi o nome do seu primeiro animal de estimação?</option>
-                    <option value="escola">Qual era o nome da sua escola primária?</option>
-                    <option value="cidade">Em que cidade você nasceu?</option>
+                    <option value="Qual foi o nome do seu primeiro animal de estimação?">Qual foi o nome do seu primeiro animal de estimação?</option>
+                    <option value="Qual era o nome da sua escola primária?">Qual era o nome da sua escola primária?</option>
+                    <option value="Em que cidade você nasceu?">Em que cidade você nasceu?</option>
                 </select>
 
                 <label for="resposta">Resposta:</label>
@@ -123,10 +230,10 @@
             </form>
         </section>
 
-        <!-- Seção Login -->
         <section class="secao-login">
             <h2>Entrar na sua conta</h2>
-            <form class="form-login" action="#" method="POST">
+            <form class="form-login" action="" method="POST">
+                <input type="hidden" name="login" value="1"> 
 
                 <label for="email_login">E-mail:</label>
                 <input type="email" id="email_login" name="email_login" placeholder="Digite seu e-mail" required>
@@ -147,12 +254,10 @@
         </section>
     </main>
 
-    <!-- Rodapé -->
     <footer class="footer">
         <p><strong>Projeto Acadêmico UMC - Pet-code</strong> | Mogi das Cruzes - SP</p>
         <p>Integrantes: Ana Julia Pinheiro da Silva, Giovanni Almeida Santos, Evelyn Kraus dos Santos.</p>
         <p>&copy; 2025 Pet-code | Incentivando a Conscientização e o Cuidado Animal.</p>
     </footer>
 </body>
-
 </html>
