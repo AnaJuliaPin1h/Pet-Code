@@ -4,7 +4,7 @@
      header('Content-Type: text/html; charset=utf-8');
 
 
-    if (!iseet($_SESSION)) {
+    if (!isset($_SESSION)) {
         session_start();
     }
 
