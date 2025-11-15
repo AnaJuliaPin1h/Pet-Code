@@ -1,52 +1,26 @@
 
 <!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | Pet-code</title>
-</head>
-<body>
-    <form action='' method='POST'>
-        <h1>faça login</h1>
-        <p>
-        <label for="">email</label>
-        <input type="email" name='email'>
-        </p>
-        <p>
-            <label for="">senha</label>
-            <input type="password" name='senha'>
-        </p>
-        <p>
-            <button type='submit'>entrar</button>
-        </p>
-
-
-    </form>
-    
-</body>
-</html>
 
 <?php
-    include('conexao.php')
+    include('conexao.php');
 
-    if (isset($_POST['email'])) || (isset($_POST['senha'])) {
+    if (isset($_POST['email']) || isset($_POST['senha'])) {
         //strlen é a quantia de caracteres
         if (strlen($_POST['email']) == 0) {
             echo "preenncha seu email";
-        } else if (strlen($_POST['senha'] ==0)) {
+        } else if (strlen($_POST['senha']) ==0) {
             echo "digite uma senha";
         } else {
             //funçao realscape tring, ela limpa a string que ta dentro do email (mais pro caso de proteçao ao banco de daods, evita o sql injection)
-            $email = mysqli->real_scape_string($_POST['email']);
-            $senha = mysqli->real_scape_string($_POST['email']);
+            $email = $mysqli->real_scape_string($_POST['email']);
+            $senha = $mysqli->real_scape_string($_POST['email']);
 
 
             //consulta ao sql
             $sql_code = "SELECT * FROM usuarios WHERE  'email'='$email' AND 'senha' = '$senha' ";
-            $dql_query = $mysqli->query($sql_code) or die("falha na execuçao do codigo sql".mysqli->error);
+            $dql_query = $mysqli->query($sql_code) or die("falha na execuçao do codigo sql".$mysqli->error);
 
-            $quantidade = $sql_query->num_rows
+            $quantidade = $sql_query->num_rows;
 
             if ($quantidade == 1) {
 
@@ -58,12 +32,127 @@
                 $_SESSION['id'] = $usuario['id'];
                 $_SESSION['nome'] = $usuario['nome'];
                 //session é uma variavel que continua valida mesmo quando a pessoa troca de pagina, get so continua valida na url, post continua valida quando é enviada por um formulario, eessa fica armazenada por uma quantia de tempo
-                header("Location: comunidade.php")
-
-            }else {
-                echo "falha ao logar";
-            }
+                header("Location: comunidade.php");
+                }
+            
+            else 
+                echo "falha ao logar"; 
         }
-
     }
 ?>
+
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | Pet-code</title>
+</head>
+<body>
+  <!-- Cabeçalho -->
+    <header class="header">
+        <div class="container">
+            <a href="index.html" class="navbar-brand">
+                <img class="pet__logo" src="Imagens/novo-logo.png" alt="Logo Pet">
+                <h1 class="logo">Pet-code</h1>
+            </a>
+            <nav class="nav">
+                <ul>
+                    <li><a href="index.html">Início</a></li>
+                    <li><a href="servicos.html">Serviços</a></li>
+                    <li><a href="cadastro.html">Cadastrar</a></li>
+                    <li><a href="comunidade.html">Comunidade</a></li>
+                    <li><a href="contato.html">Contato</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Conteúdo Principal -->
+    <main class="container">
+
+        <!-- Seção Cadastro -->
+        <section class="secao-cadastro">
+            <h2>Crie sua conta na Pet-code 
+                <img src="Imagens/icons8-cachorro-novo-cadastro.png" alt="Ícone dog cadastro">
+            </h2>
+            <p>Cadastre-se para acessar todos os recursos da plataforma e interagir com outros tutores!</p>
+
+            <form class="form-cadastro" action="#" method="POST">
+
+                <h3>
+                    <img src="Imagens/icons8-pessoa-do-sexo-masculino-64-cadastro.png" alt="Ícone person cadastro">
+                    Dados do Usuário
+                </h3>
+                <label for="nome">Nome completo:</label>
+                <input type="text" id="nome" name="nome" placeholder="Digite seu nome completo" required>
+
+                <label for="email">E-mail:</label>
+                <input type="email" id="email" name="email" placeholder="Digite seu e-mail" required>
+
+                <label for="senha">Senha:</label>
+                <input type="password" id="senha" name="senha" placeholder="Crie uma senha" required>
+
+                <label for="confirmar_senha">Confirme sua senha:</label>
+                <input type="password" id="confirmar_senha" name="confirmar_senha" placeholder="Confirme sua senha" required>
+
+                <h3>
+                    <img src="Imagens/icons8-desbloquear-48.png" alt="Ícone cadeado">
+                    Pergunta de segurança
+                </h3>
+                <label for="pergunta">Escolha uma pergunta:</label>
+                <select id="pergunta" name="pergunta" required>
+                    <option value="">Selecione...</option>
+                    <option value="animal">Qual foi o nome do seu primeiro animal de estimação?</option>
+                    <option value="escola">Qual era o nome da sua escola primária?</option>
+                    <option value="cidade">Em que cidade você nasceu?</option>
+                </select>
+
+                <label for="resposta">Resposta:</label>
+                <input type="text" id="resposta" name="resposta" placeholder="Digite sua resposta" required>
+
+                <h3>
+                    <img src="Imagens/icons8-dog-48.png" alt="Ícone dog">
+                    Dados do Pet (opcional)
+                </h3>
+                <input type="text" name="nome_pet" placeholder="Nome do pet">
+                <input type="text" name="especie" placeholder="Espécie (ex: cão, gato)">
+                <input type="number" name="idade" placeholder="Idade do pet (em anos)" min="0" max="20">
+
+                <button type="submit" class="btn btn-principal">Cadastrar</button>
+                <p class="texto-login">Já tem uma conta? <a href="#">Faça login</a></p>
+            </form>
+        </section>
+
+        <!-- Seção Login -->
+        <section class="secao-login">
+            <h2>Entrar na sua conta</h2>
+            <form class="form-login" action="#" method="POST">
+
+                <label for="email_login">E-mail:</label>
+                <input type="email" id="email_login" name="email_login" placeholder="Digite seu e-mail" required>
+
+                <label for="senha_login">Senha:</label>
+                <input type="password" id="senha_login" name="senha_login" placeholder="Digite sua senha" required>
+
+                <button type="submit" class="btn btn-secundario">Entrar</button>
+
+                <p>Ou entre com sua conta do Google:</p>
+                <button type="button" class="btn-google">
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="20">
+                    Entrar com o Google
+                </button>
+
+                <p class="esqueceu-senha"><a href="#">Esqueceu sua senha?</a></p>
+            </form>
+        </section>
+    </main>
+
+    <!-- Rodapé -->
+    <footer class="footer">
+        <p><strong>Projeto Acadêmico UMC - Pet-code</strong> | Mogi das Cruzes - SP</p>
+        <p>Integrantes: Ana Julia Pinheiro da Silva, Giovanni Almeida Santos, Evelyn Kraus dos Santos.</p>
+        <p>&copy; 2025 Pet-code | Incentivando a Conscientização e o Cuidado Animal.</p>
+    </footer>
+</body>
+
+</html>
