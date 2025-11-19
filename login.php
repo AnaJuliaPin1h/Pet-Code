@@ -1,91 +1,57 @@
 <?php
 // Inclui as variáveis de configuração e a função conectar_banco()
-require_once('conexao.php');
+require_once('conexao/conexao.php');
 
 // Inicia a sessão para armazenar mensagens de feedback
 session_start();
 
 // Define a conexão para o escopo global do script
 global $table_name;
-$conn = conectar_banco(); // Conecta ao DB no início
+$conn = conectar_banco();
 
-$message = $_SESSION['message'] ?? '';
-$message_type = $_SESSION['message_type'] ?? '';
-
-// Limpa as mensagens da sessão após exibir
-unset($_SESSION['message']);
-unset($_SESSION['message_type']);
+$message = '';
+$message_type = '';
 
 // --- LÓGICA DE PROCESSAMENTO ---
 
 // Processamento do Formulário de Registro
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register'])) {
     
-    // 1. Obtém e sanitiza os dados (sem real_escape_string, pois estamos usando prepared statements)
-    $nome = $_POST['nome'] ?? '';
-    $email = $_POST['email'] ?? '';
+    $nome = trim($_POST['nome'] ?? '');
+    $email = trim($_POST['email'] ?? '');
     $senha = $_POST['senha'] ?? '';
     $confirmar_senha = $_POST['confirmar_senha'] ?? '';
-    $pergunta = $_POST['pergunta'] ?? '';
-    $resposta = $_POST['resposta'] ?? '';
-    
-    // Dados Opcionais
-    $nome_pet = $_POST['nome_pet'] ?? '';
-    $especie = $_POST['especie'] ?? '';
-    $idade = (int)($_POST['idade'] ?? 0);
 
-    // 2. Validação
-    if ($senha !== $confirmar_senha) {
+    // Validação básica
+    if (empty($nome) || empty($email) || empty($senha)) {
+        $message = "Erro: Por favor, preencha todos os campos obrigatórios.";
+        $message_type = "error";
+    } elseif ($senha !== $confirmar_senha) {
         $message = "Erro: As senhas não coincidem.";
         $message_type = "error";
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $message = "Erro: Formato de e-mail inválido.";
-        $message_type = "error";
-    } elseif (empty($nome) || empty($email) || empty($senha)) {
-        $message = "Erro: Por favor, preencha todos os campos obrigatórios (Nome, E-mail, Senha).";
-        $message_type = "error";
     } else {
-        // 3. Hashing da senha
-        $senha_hash = password_hash($senha, PASSWORD_DEFAULT);
-
-        // 4. Verifica se o e-mail já existe
-        $check_sql = "SELECT id FROM $table_name WHERE email = ?";
-        $stmt_check = $conn->prepare($check_sql);
+        // VERIFICAR: Vamos ver o que está sendo enviado
+        error_log("Tentativa de cadastro - Nome: $nome, Email: $email, Senha: $senha");
         
-        if ($stmt_check === false) {
-             $message = "Erro na preparação da consulta de verificação: " . $conn->error;
-             $message_type = "error";
+        // Por enquanto, vamos salvar a senha em texto puro para testar
+        $sql = "INSERT INTO $table_name (nome, email, senha) VALUES (?, ?, ?)";
+        $stmt = $conn->prepare($sql);
+        
+        if ($stmt === false) {
+            $message = "Erro na preparação: " . $conn->error;
+            $message_type = "error";
         } else {
-            $stmt_check->bind_param("s", $email);
-            $stmt_check->execute();
-            $stmt_check->store_result();
+            $stmt->bind_param("sss", $nome, $email, $senha);
             
-            if ($stmt_check->num_rows > 0) {
-                $message = "Erro: Este e-mail já está cadastrado.";
-                $message_type = "error";
+            if ($stmt->execute()) {
+                $message = "Cadastro realizado com sucesso! Agora faça login.";
+                $message_type = "success";
+                error_log("Usuário cadastrado com ID: " . $stmt->insert_id);
             } else {
-                // 5. Insere novo usuário
-                $sql = "INSERT INTO $table_name (nome, email, senha_hash, pergunta_seguranca, resposta_seguranca, nome_pet, especie, idade_pet) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-                
-                $stmt = $conn->prepare($sql);
-
-                if ($stmt === false) {
-                    $message = "Erro na preparação da consulta de inserção: " . $conn->error;
-                    $message_type = "error";
-                } else {
-                    $stmt->bind_param("sssssssi", $nome, $email, $senha_hash, $pergunta, $resposta, $nome_pet, $especie, $idade);
-
-                    if ($stmt->execute()) {
-                        $message = "Cadastro realizado com sucesso! Bem-vindo(a) à Pet-code.";
-                        $message_type = "success";
-                    } else {
-                        $message = "Erro ao cadastrar: " . $stmt->error;
-                        $message_type = "error";
-                    }
-                    $stmt->close();
-                }
+                $message = "Erro ao cadastrar: " . $stmt->error;
+                $message_type = "error";
             }
-            $stmt_check->close();
+            $stmt->close();
         }
     }
 } 
@@ -93,14 +59,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register'])) {
 // Processamento do Formulário de Login
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['login'])) {
 
-    $email_login = $_POST['email_login'] ?? '';
+    $email_login = trim($_POST['email_login'] ?? '');
     $senha_login = $_POST['senha_login'] ?? '';
 
-    $sql = "SELECT id, nome, senha_hash FROM $table_name WHERE email = ?";
+    error_log("Tentativa de login - Email: $email_login, Senha: $senha_login");
+
+    $sql = "SELECT id, nome, senha FROM $table_name WHERE email = ?";
     $stmt = $conn->prepare($sql);
     
     if ($stmt === false) {
-        $message = "Erro na preparação da consulta de login: " . $conn->error;
+        $message = "Erro na preparação: " . $conn->error;
         $message_type = "error";
     } else {
         $stmt->bind_param("s", $email_login);
@@ -110,18 +78,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['login'])) {
         if ($result->num_rows === 1) {
             $user = $result->fetch_assoc();
             
-            // Verifica a senha
-            if (password_verify($senha_login, $user['senha_hash'])) {
-                $message = "Login realizado com sucesso! Olá, " . htmlspecialchars($user['nome']) . ".";
-                $message_type = "success";
-                // --- AQUI VOCÊ DEVE INICIAR A SESSÃO DE LOGIN ---
+            error_log("Usuário encontrado: " . $user['nome']);
+            error_log("Senha no banco: " . $user['senha']);
+            error_log("Senha digitada: " . $senha_login);
+            error_log("São iguais? " . ($user['senha'] === $senha_login ? 'SIM' : 'NÃO'));
+            
+            // Comparação direta (texto puro)
+            if ($user['senha'] === $senha_login) {
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['user_nome'] = $user['nome'];
-                // Redirecionar para a página principal após o login é uma boa prática:
-                // header("Location: index.php"); 
-                // exit();
-                // ----------------------------------------------------
-
+                
+                header("Location: comunidade.php");
+                exit();
             } else {
                 $message = "Erro de Login: Senha incorreta.";
                 $message_type = "error";
@@ -134,11 +102,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['login'])) {
     }
 }
 
-// Fecha a conexão com o banco de dados no final do script.
+// Fecha a conexão
 $conn->close();
-
 ?>
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -161,7 +127,7 @@ $conn->close();
                     <li><a href="index.html">Início</a></li>
                     <li><a href="servicos.html">Serviços</a></li>
                     <li><a href="login.php">Cadastrar</a></li>
-                    <li><a href="comunidade.html">Comunidade</a></li>
+                    <li><a href="comunidade.php">Comunidade</a></li>
                     <li><a href="contato.html">Contato</a></li>
                 </ul>
             </nav>

@@ -15,7 +15,7 @@
 </head>
 <body>
     <p>
-        <a href="logout"> Sair </a>
+        <a href="login.php"> Sair </a>
     </p>
     
 </body>
